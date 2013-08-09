@@ -2,7 +2,7 @@ var net = require('net');
 var events = require('events');
 var util = require('util');
 
-var log = function (input, msg) {
+var log = function (msg, input) {
     var date = new Date();
     console.log(Date().toString() + "|" + (input ? "<-" : "->") + "|" + msg);
 };
@@ -28,24 +28,40 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
     socket.genericSocket = new GenericSocket();
     socket.connected = false;
 
+    var _partialMessage;
+
     /**
      * @FIXME Do not send last message if not finished
      */
-     var onData = function onData (data) {
-        data
-        .split('\r\n')
-        .filter(function (line) { return line !== ''; })
-        .filter(function (line) {
-            if (line.slice(0, 4) === 'PING') {
-                socket.raw(['PONG', line.slice(line.indexOf(':'))]);
-                return false;
-            }
+    var assembleMessages = function assembleMessages (data) {
+        var messages = data.split('\r\n')
+            .filter(function (line) { return line !== ''; })
+            .filter(function (line) {
+                if (line.slice(0, 4) === 'PING') {
+                    socket.raw(['PONG', line.slice(line.indexOf(':'))]);
+                    return false;
+                }
 
-            return true;
-        })
-        .forEach(function (line) {
-            log(true, line);
-            socket.emit('data', line);
+                return true;
+            })
+
+        // Do we have a partial message to complete?
+        if (this._partialMessage) {
+            console.log("\n#####START RECONSTRUCTED#####");
+            console.log("joining: <<" + this._partialMessage + ">> and <<" +
+                        messages[0] + ">>");
+            messages[0] = this._partialMessage + messages[0];
+            console.log("#####STOP  RECONSTRUCTED#####\n");
+            this._partialMessage = null;
+        }
+
+        // Last message ends without '\r\n'? Then it's incomplete
+        if (data.substring(data.length - 2, data.length) != '\r\n') {
+            this._partialMessage = messages.pop();
+        }
+
+        messages.forEach(function (message) {
+            socket.emit('message', message);
         });
     };
 
@@ -73,9 +89,11 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
         socket.connected = false;
     });
 
-    socket.genericSocket.on('data', onData);
+    socket.genericSocket.on('data', assembleMessages);
     socket.genericSocket.setEncoding('ascii');
     socket.genericSocket.setNoDelay();
+
+    socket.on('message', log, true);
 
     return socket;
 };
