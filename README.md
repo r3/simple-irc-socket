@@ -45,13 +45,13 @@ a space. The message '''must''' follow the
 var details = {...};
 var myConnection = Ircsocket(details);
 
-mySocket.start();
-mySocket.once('ready', function () {
+myConnection.start();
+myConnection.once('ready', function () {
     // Using a string.
-    mySocket.raw("JOIN #biscuits");
+    myConnection.raw("JOIN #biscuits");
 }
 
-mySocket.on('data', function (message) {
+myConnection.on('message', function (message) {
     message = message.split(" ");
 
     // Numeric 333 is sent when a user joins a channel.
@@ -60,14 +60,14 @@ mySocket.on('data', function (message) {
         message[3] === "#biscuits")
     {
         // Using an array instead of a string.
-        mySocket.raw(["PRIVMSG", "#biscuits", ":Hello world."])
+        myConnection.raw(["PRIVMSG", "#biscuits", ":Hello world."])
     }
 });
 
-mySocket.on('data', function (message) {
+myConnection.on('message', function (message) {
     // This is sent when you do /quit too.
     if (message.slice(0, 5) === "ERROR") {
-        mySocket.end();
+        myConnection.end();
     }
 })
 ```
@@ -85,8 +85,8 @@ validate input, an evil user can't send a command causing the bot to quit:
 You do not need to handle PING messages. They are filtered from the messages
 emitted by the socket.
 
-All other messages are emitted via a 'data' event. Receiving callbacks to this
-event will receive the message as the first parameter.
+All other messages are emitted via a 'message' event. Callbacks invoked by
+this event will be passed the message as the first parameter.
 
 Examples of reading messages are in the previous example. Messages generally
 look like the following:
@@ -113,7 +113,8 @@ This method returns the realname (also called gecos) of the connection.
 The basic-irc-socket is an event emitter. It emits two events.
 
 + ready(): Once the first 001 message has been acknowledged.
-+ data(message: String): Every message (including the 001) from the
+
++ message(msg: String): Every message (including the 001) from the
 sender (inclusive) the the newline (exclusive).
 
 ## Testing ##
@@ -124,10 +125,3 @@ Install jasmine-node globally, and then test via npm.
 npm install -g jasmine-node
 npm test
 ```
-
-## Known Issues ##
-
-If the generic socket sends an incomplete message, such as when showing a
-long MOTD, the basic-irc-socket will emit the incomplete message and then,
-with the next input, emit a strangely named event based on whatever the rest
-of the broken up message was.
