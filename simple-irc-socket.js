@@ -59,8 +59,8 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
                 }
 
                 messages.forEach(function (msg) {
-                    this.emit('message', msg);
-                }, this);
+                    socket.emit('message', msg);
+                });
             }
         }
     }
@@ -99,7 +99,7 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
     socket.genericSocket.setEncoding('ascii');
     socket.genericSocket.setNoDelay();
 
-    ircBuffer.on('message', log);
+    socket.on('message', log);
 
     return socket;
 };
