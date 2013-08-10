@@ -28,42 +28,45 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
     socket.genericSocket = new GenericSocket();
     socket.connected = false;
 
-    var _partialMessage;
+    var bufferDescription = {
+        partialMessage: {
+            writable: true,
+            configurable: true
+        },
 
-    /**
-     * @FIXME Do not send last message if not finished
-     */
-    var assembleMessages = function assembleMessages (data) {
-        var messages = data.split('\r\n')
-            .filter(function (line) { return line !== ''; })
-            .filter(function (line) {
-                if (line.slice(0, 4) === 'PING') {
-                    socket.raw(['PONG', line.slice(line.indexOf(':'))]);
-                    return false;
+        receiveBlock: {
+            enumerable: true,
+            value: function (block) {
+                var messages = block.split('\r\n')
+                    .filter(function (line) { return line !== ''; })
+                    .filter(function (line) {
+                        if (line.slice(0, 4) === 'PING') {
+                            var msg = ['PONG', line.slice(line.indexOf(':'))];
+                            socket.raw(msg);
+                            return false;
+                        }
+
+                        return true;
+                    })
+
+                if (this.partialMessage) {
+                    messages[0] = this.partialMessage + messages[0];
+                    this.partialMessage = null;
                 }
 
-                return true;
-            })
+                if (block.substring(block.length - 2, block.length) != '\r\n') {
+                    this.partialMessage = messages.pop();
+                }
 
-        // Do we have a partial message to complete?
-        if (this._partialMessage) {
-            console.log("\n#####START RECONSTRUCTED#####");
-            console.log("joining: <<" + this._partialMessage + ">> and <<" +
-                        messages[0] + ">>");
-            messages[0] = this._partialMessage + messages[0];
-            console.log("#####STOP  RECONSTRUCTED#####\n");
-            this._partialMessage = null;
+                messages.forEach(function (msg) {
+                    this.emit('message', msg);
+                }, this);
+            }
         }
+    }
 
-        // Last message ends without '\r\n'? Then it's incomplete
-        if (data.substring(data.length - 2, data.length) != '\r\n') {
-            this._partialMessage = messages.pop();
-        }
-
-        messages.forEach(function (message) {
-            socket.emit('message', message);
-        });
-    };
+    var ircBuffer = Object.create(events.EventEmitter.prototype,
+                                  bufferDescription);
 
     void function readyEvent () {
         var emitWhenReady = function (data) {
@@ -89,11 +92,14 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
         socket.connected = false;
     });
 
-    socket.genericSocket.on('data', assembleMessages);
+    // TODO: Can this be cleaned up? Some way to set `this` for callbacks?
+    socket.genericSocket.on('data', function (block) {
+        ircBuffer.receiveBlock(block);
+    });
     socket.genericSocket.setEncoding('ascii');
     socket.genericSocket.setNoDelay();
 
-    socket.on('message', log, true);
+    ircBuffer.on('message', log);
 
     return socket;
 };
@@ -135,7 +141,7 @@ Socket.prototype = create(events.EventEmitter.prototype, {
             throw new Error('Newline detected in message. Use multiple raws instead.');
         }
 
-        log(false, message);
+        log(message, true);
         this.genericSocket.write(message + '\n', 'ascii');
     },
 
