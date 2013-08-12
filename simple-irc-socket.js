@@ -2,6 +2,8 @@ var net = require('net');
 var events = require('events');
 var util = require('util');
 
+var IrcBuffer = require('./buffer');
+
 var log = function (msg, input) {
     var date = new Date();
     console.log(Date().toString() + "|" + (input ? "<-" : "->") + "|" + msg);
@@ -28,45 +30,11 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
     socket.genericSocket = new GenericSocket();
     socket.connected = false;
 
-    var bufferDescription = {
-        partialMessage: {
-            writable: true,
-            configurable: true
-        },
-
-        receiveBlock: {
-            enumerable: true,
-            value: function (block) {
-                var messages = block.split('\r\n')
-                    .filter(function (line) { return line !== ''; })
-                    .filter(function (line) {
-                        if (line.slice(0, 4) === 'PING') {
-                            var msg = ['PONG', line.slice(line.indexOf(':'))];
-                            socket.raw(msg);
-                            return false;
-                        }
-
-                        return true;
-                    })
-
-                if (this.partialMessage) {
-                    messages[0] = this.partialMessage + messages[0];
-                    this.partialMessage = null;
-                }
-
-                if (block.substring(block.length - 2, block.length) != '\r\n') {
-                    this.partialMessage = messages.pop();
-                }
-
-                messages.forEach(function (msg) {
-                    socket.emit('message', msg);
-                });
-            }
-        }
-    }
-
-    var ircBuffer = Object.create(events.EventEmitter.prototype,
-                                  bufferDescription);
+    var ircBuffer = new IrcBuffer('\r\n');
+    ircBuffer.on('ping', function (msg) {
+        return socket.pong(msg);
+    });
+    ircBuffer.on('message', log);
 
     void function readyEvent () {
         var emitWhenReady = function (data) {
@@ -92,14 +60,11 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
         socket.connected = false;
     });
 
-    // TODO: Can this be cleaned up? Some way to set `this` for callbacks?
     socket.genericSocket.on('data', function (block) {
         ircBuffer.receiveBlock(block);
     });
     socket.genericSocket.setEncoding('ascii');
     socket.genericSocket.setNoDelay();
-
-    socket.on('message', log);
 
     return socket;
 };
@@ -151,5 +116,11 @@ Socket.prototype = create(events.EventEmitter.prototype, {
 
     getRealName : function () {
         return this._realname;
+    },
+
+    pong : function (msg) {
+        console.log("PONG!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
+        debugger;
+        return this.raw(msg);
     }
 });
