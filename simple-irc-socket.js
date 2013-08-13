@@ -31,9 +31,7 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
     socket.connected = false;
 
     var ircBuffer = new IrcBuffer('\r\n');
-    ircBuffer.on('ping', function (msg) {
-        return socket.pong(msg);
-    });
+    ircBuffer.on('ping', socket.pong.bind(socket));
     ircBuffer.on('message', log);
 
     void function readyEvent () {
@@ -53,16 +51,15 @@ var Socket = module.exports = function Socket (network, GenericSocket) {
     socket.genericSocket.once('connect', function () {
         socket.connected = true;
         socket.raw(["NICK", network.nick]);
-        socket.raw(["USER", network.user || "user", "8 * :" + network.realname]);
+        socket.raw(["USER", network.user || "user", "8 * :"
+                   + network.realname]);
     });
 
     socket.genericSocket.once('close', function () {
         socket.connected = false;
     });
 
-    socket.genericSocket.on('data', function (block) {
-        ircBuffer.receiveBlock(block);
-    });
+    socket.genericSocket.on('data', ircBuffer.receiveBlock.bind(ircBuffer));
     socket.genericSocket.setEncoding('ascii');
     socket.genericSocket.setNoDelay();
 
@@ -103,7 +100,9 @@ Socket.prototype = create(events.EventEmitter.prototype, {
         }
 
         if (message.indexOf('\n') !== -1) {
-            throw new Error('Newline detected in message. Use multiple raws instead.');
+            throw new Error(
+                'Newline detected in message. Use multiple raws instead.'
+            );
         }
 
         log(message, true);
@@ -119,8 +118,6 @@ Socket.prototype = create(events.EventEmitter.prototype, {
     },
 
     pong : function (msg) {
-        console.log("PONG!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1")
-        debugger;
         return this.raw(msg);
     }
 });

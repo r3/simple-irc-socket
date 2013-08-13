@@ -37,8 +37,8 @@ Buffer.prototype = Object.create(events.EventEmitter.prototype, {
             }
 
             messages.forEach(function (msg) {
-                this.emit('message', msg);
-            }, this);
+                that.emit('message', msg);
+            });
         }
     }
 })
